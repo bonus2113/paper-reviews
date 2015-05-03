@@ -20,9 +20,36 @@ class SigmaDelta:
 		ltMask = self.vt < self.n * self.ot
 		gtMask = self.vt > self.n * self.ot
 		totalMask = ltMask + gtMask * -1
-		self.vt = (self.vt + totalMask).astype('uint8')
+		self.vt = np.clip(self.vt + totalMask, 2, 255).astype('uint8')
 		
 		return ((self.ot > self.vt) * 255).astype('uint8')
+		
+class ConditionalSigmaDelta:
+	def __init__(self, width, height, firstFrame, n):
+		self.width = width
+		self.height = height
+		self.mt = firstFrame
+		self.zeros = np.zeros((width, height))
+		self.ot = self.zeros
+		self.vt = self.zeros
+		self.et = np.ones((width, height))
+		self.n = n
+		
+	def apply(self, frame):
+		ltMask = self.mt < frame
+		gtMask = self.mt > frame
+		totalMask = ltMask + gtMask * -1
+		totalMask *= self.et != self.zeros
+		
+		self.mt = (self.mt + totalMask).astype('uint8')
+		self.ot = cv2.absdiff(self.mt, frame)
+		
+		ltMask = self.vt < self.n * self.ot
+		gtMask = self.vt > self.n * self.ot
+		totalMask = ltMask + gtMask * -1
+		self.vt = np.clip(self.vt + totalMask, 2, 255).astype('uint8')
+		self.et = ((self.ot > self.vt) * 255).astype('uint8')
+		return self.et
 
 def readGray(cap):
 	ret, frame = cap.read()
@@ -41,7 +68,7 @@ def main():
 	print height
 	
 	ret, frame = readGray(cap)
-	sigmaDelta = SigmaDelta(width, height, frame, 5)
+	sigmaDelta = ConditionalSigmaDelta(width, height, frame, 5)
 	
 	while(1):
 		ret, frame = readGray(cap)
